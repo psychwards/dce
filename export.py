@@ -38,25 +38,6 @@ class export:
             pathlib.Path(__file__).parent.resolve(), str(int(time.time()))
         )
 
-    def ratelimitchk(self, response: httpx.Response, *args, **kwargs):
-        # response.read()
-        # print(response.content)
-        if (
-            "X-RateLimit-Reset-After"
-            and "X-RateLimit-Remaining" in response.headers
-            and (
-                int(response.headers["X-RateLimit-Remaining"]) <= 0
-                and timedelta(
-                    seconds=float(response.headers["X-RateLimit-Reset-After"])
-                )
-                is not None
-            )
-        ):
-            # print("IM SCHIZOPHRENIC !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            delay = min(self.ratelimit["X-RateLimit-Reset-After"] + 1, 60)
-            print(f"[!] sleeping for {delay} seconds")
-            time.sleep(delay)
-
     def get_avatar(self, path, user) -> str:
         fileext = "gif" if user["avatar"].startswith("a_") else "png"
         filename = os.path.join(
@@ -124,7 +105,7 @@ class export:
                             "url": self.download_asset(
                                 asset=attachment["url"],
                                 folder=folder,
-                                type=re.sub(r"\?ex=(.*)", "", attachment["proxy_url"].split(".")[-1]),
+                                type=attachment["proxy_url"].split(".")[-1],
                             ),
                             "fileName": attachment["filename"],
                             "fileSizeBytes": attachment["size"],
@@ -240,20 +221,23 @@ class export:
                 embed["url"] = self.download_asset(
                     asset=embed["thumbnail"]["url"],
                     folder=folder,
-                    type=re.sub(r"\?ex=(.*)", "", embed["thumbnail"]["url"].split(".")[-1]), # re.sub(r"\?ex=(.*)", "", attachment["url"].split(".")[-1])attachment["url"].split(".")[-1])
+                    type=embed["thumbnail"]["url"].split(".")[-1]
                 )
             elif embed["type"] == "video":
                 if "proxy_url" in embed["video"]:
                     embed["video"]["url"] = self.download_asset(
                         asset=embed["video"]["proxy_url"],
                         folder=folder,
-                        type=re.sub(r"\?ex=(.*)", "", embed["video"]["proxy_url"].split(".")[-1]),
+                        type=embed["video"]["proxy_url"].split(".")[-1],
                     )
                 if "thumbnail" in embed:
                     embed["thumbnail"]["url"] = self.download_asset(
-                        asset=embed["thumbnail"]["url"], folder=folder, type="jpeg" # re.sub(r"\?ex=(.*)", "", attachment["proxy_url"].split(".")[-1])
+                        asset=embed["thumbnail"]["url"], folder=folder, type="jpeg"
                     )
         return embeds
+    
+    def clean_string(self, string):
+        return "".join(x for x in string if x.isalnum())
 
     def download_asset(self, asset: str, folder: os.PathLike, type: str = None) -> str:
         try:
@@ -275,7 +259,8 @@ class export:
                     f"[[bold pink1]![/bold pink1]] [bold medium_purple1]couldn't download asset: [bold pink1]{asset}[/bold pink1][/bold medium_purple1] | {request.status_code}"
                 )
                 return asset
-            filename = f"{hashlib.sha256(request.content).hexdigest()}.{type or filetype.guess_extension(request.content) or 'unknown'}"
+            filename = f"{hashlib.sha256(request.content).hexdigest()}.{self.clean_string(type or filetype.guess_extension(request.content) or 'unknown')}"
+            
             with open(os.path.join(folder, filename), "wb") as f:
                 f.write(request.content)
             return os.path.join(folder, filename)
@@ -324,7 +309,6 @@ class export:
             os.rmdir(folder)
 
     def start(self):
-        self.session.event_hooks["response"].append(self.ratelimitchk)
         for account in self.data:
             for channel in account["channels"]:
                 Thread(
